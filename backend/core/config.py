@@ -15,6 +15,8 @@ class Settings:
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "https://fastedl.app",
+        "https://fastedl-frontend.vercel.app",
+        "https://fastedl.vercel.app",
         "*"
     ]
 

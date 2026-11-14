@@ -33,6 +33,10 @@ def get_instaloader() -> instaloader.Instaloader:
             request_timeout=settings.REQUEST_TIMEOUT_SECONDS,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         )
+        # Prevent Instaloader from sleeping for 10+ minutes on 429
+        _instaloader_instance.context.max_connection_attempts = 1
+        _instaloader_instance.context.raise_all_errors = True
+        _instaloader_instance.context.do_sleep = lambda *args, **kwargs: None
     return _instaloader_instance
 
 
@@ -649,6 +653,12 @@ def extract_with_ytdlp(url: str, shortcode: str, raw_type: str) -> Dict[str, Any
         "socket_timeout": settings.REQUEST_TIMEOUT_SECONDS,
         "extract_flat": False,
         "noplaylist": False,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Mode": "navigate",
+        }
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
