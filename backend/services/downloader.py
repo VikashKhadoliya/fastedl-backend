@@ -1,6 +1,7 @@
 import os
 import uuid
 import logging
+import shutil
 import requests
 import subprocess
 import tempfile
@@ -160,29 +161,44 @@ def merge_and_stream_ffmpeg(video_url: str, audio_url: str, filename: str) -> St
                         f.write(chunk)
 
         # Run FFmpeg to merge video and audio without re-encoding video stream
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-i", video_tmp,
-            "-i", audio_tmp,
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-shortest",
-            "-movflags", "+faststart",
-            output_tmp
-        ]
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
-        if proc.returncode != 0 or not os.path.exists(output_tmp):
-            logger.error(f"FFmpeg merge failed: {proc.stderr.decode(errors='ignore')}")
-            # Fallback: stream the video stream if merge failed
-            if os.path.exists(video_tmp):
-                output_tmp = video_tmp
+        ffmpeg_bin = shutil.which("ffmpeg")
+        merge_success = False
 
-        file_size = os.path.getsize(output_tmp)
+        if ffmpeg_bin:
+            cmd = [
+                ffmpeg_bin,
+                "-y",
+                "-i", video_tmp,
+                "-i", audio_tmp,
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-shortest",
+                "-movflags", "+faststart",
+                output_tmp
+            ]
+            try:
+                proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
+                if proc.returncode == 0 and os.path.exists(output_tmp) and os.path.getsize(output_tmp) > 0:
+                    merge_success = True
+                else:
+                    err_msg = proc.stderr.decode(errors='ignore') if proc.stderr else "Unknown error"
+                    logger.warning(f"FFmpeg merge exited with code {proc.returncode}: {err_msg[:300]}")
+            except Exception as ffmpeg_err:
+                logger.warning(f"FFmpeg process execution failed: {ffmpeg_err}")
+        else:
+            logger.warning("FFmpeg binary not detected on system. Falling back to video stream.")
+
+        # If merge was successful, stream output_tmp; otherwise stream video_tmp
+        stream_target = output_tmp if (merge_success and os.path.exists(output_tmp)) else video_tmp
+
+        if not os.path.exists(stream_target) or os.path.getsize(stream_target) == 0:
+            raise HTTPException(status_code=502, detail="Downloaded media stream is empty or corrupt")
+
+        file_size = os.path.getsize(stream_target)
 
         def cleanup_stream():
             try:
-                with open(output_tmp, "rb") as f:
+                with open(stream_target, "rb") as f:
                     while True:
                         chunk = f.read(settings.CHUNK_SIZE)
                         if not chunk:
@@ -200,7 +216,7 @@ def merge_and_stream_ffmpeg(video_url: str, audio_url: str, filename: str) -> St
             "Content-Disposition": f'attachment; filename="{safe_name}"',
             "Content-Length": str(file_size),
             "Cache-Control": "public, max-age=3600",
-            "Access-Control-Expose-Headers": "Content-Disposition"
+            "Access-Control-Expose-Headers": "Content-Disposition, Content-Length"
         }
 
         return StreamingResponse(
@@ -218,5 +234,5 @@ def merge_and_stream_ffmpeg(video_url: str, audio_url: str, filename: str) -> St
                 pass
         if isinstance(e, HTTPException):
             raise
-        logger.error(f"Error during media merge: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to merge audio and video streams")
+        logger.error(f"Error during media download/stream: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process video stream")

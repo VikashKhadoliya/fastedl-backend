@@ -32,16 +32,39 @@ RESERVED_SLUGS = {
 
 SAFE_FILENAME_REGEX = re.compile(r"[^A-Za-z0-9_.-]")
 
+def clean_raw_instagram_url(raw_input: str) -> str:
+    """
+    Cleans, extracts, and normalizes an Instagram URL from arbitrary user input.
+    Handles links embedded in share text, missing schemes, whitespace, quotes, etc.
+    """
+    if not raw_input:
+        return ""
+    
+    cleaned = raw_input.strip().strip("'\"<>[]()")
+    
+    # Check if user pasted share text containing a link
+    extracted = re.search(r"https?://[^\s]+", cleaned)
+    if extracted:
+        cleaned = extracted.group(0).rstrip(".,;!?)\"'")
+    
+    # Auto-prepend https:// if scheme is missing
+    if not cleaned.startswith("http://") and not cleaned.startswith("https://"):
+        if cleaned.startswith("instagram.com") or cleaned.startswith("www.instagram.com") or cleaned.startswith("instagr.am") or cleaned.startswith("ddinstagram.com"):
+            cleaned = "https://" + cleaned
+            
+    return cleaned
+
 def validate_instagram_url(url_str: str) -> Tuple[str, str]:
     """
     Validates that a URL is a legitimate Instagram post, reel, story, tv, or profile URL.
     Returns (content_type, shortcode_or_identifier).
     Raises HTTPException(400) if invalid.
     """
-    if not url_str:
+    cleaned_url = clean_raw_instagram_url(url_str)
+    if not cleaned_url:
         raise HTTPException(status_code=400, detail="URL cannot be empty")
 
-    parsed = urlparse(url_str.strip())
+    parsed = urlparse(cleaned_url)
 
     if parsed.scheme not in ("http", "https"):
         raise HTTPException(
@@ -50,10 +73,14 @@ def validate_instagram_url(url_str: str) -> Tuple[str, str]:
         )
 
     hostname = (parsed.hostname or "").lower()
-    if hostname not in ("instagram.com", "www.instagram.com", "m.instagram.com"):
+    allowed_hosts = (
+        "instagram.com", "www.instagram.com", "m.instagram.com",
+        "instagr.am", "www.instagr.am", "ddinstagram.com"
+    )
+    if hostname not in allowed_hosts and not hostname.endswith(".instagram.com"):
         raise HTTPException(
             status_code=400,
-            detail="Only Instagram URLs (instagram.com) are supported"
+            detail="Only Instagram URLs (e.g. instagram.com/reel/...) are supported"
         )
 
     path = parsed.path.strip()

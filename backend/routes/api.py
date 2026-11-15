@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 class DownloadRequest(BaseModel):
-    url: HttpUrl
+    url: str
 
 @router.get("/")
 @router.get("/health")
