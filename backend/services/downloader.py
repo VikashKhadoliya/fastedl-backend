@@ -87,7 +87,7 @@ def stream_media(
         response_headers = {
             "Content-Disposition": f'attachment; filename="{safe_name}"',
             "Cache-Control": "public, max-age=3600",
-            "Access-Control-Expose-Headers": "Content-Disposition"
+            "Access-Control-Expose-Headers": "Content-Disposition, Content-Length, Accept-Ranges, Content-Type"
         }
         if content_length_hdr:
             response_headers["Content-Length"] = content_length_hdr
@@ -216,7 +216,7 @@ def merge_and_stream_ffmpeg(video_url: str, audio_url: str, filename: str) -> St
             "Content-Disposition": f'attachment; filename="{safe_name}"',
             "Content-Length": str(file_size),
             "Cache-Control": "public, max-age=3600",
-            "Access-Control-Expose-Headers": "Content-Disposition, Content-Length"
+            "Access-Control-Expose-Headers": "Content-Disposition, Content-Length, Accept-Ranges, Content-Type"
         }
 
         return StreamingResponse(
