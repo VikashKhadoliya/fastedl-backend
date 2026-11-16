@@ -586,6 +586,8 @@ def extract_with_instaloader(shortcode: str, raw_type: str) -> Dict[str, Any]:
             orig_height=orig_h
         )
         best_dl = qualities[0]["download_url"] if (qualities and qualities[0].get("download_url")) else video_url
+        _, best_audio = parse_dash_manifest(dash_manifest or "")
+        direct_audio_url = best_audio["url"] if best_audio else None
 
         res_str = f"{orig_w}x{orig_h}" if (orig_w and orig_h) else None
         dim_label = f"{orig_w} × {orig_h} px" if (orig_w and orig_h) else None
@@ -596,6 +598,7 @@ def extract_with_instaloader(shortcode: str, raw_type: str) -> Dict[str, Any]:
             "format": "MP4",
             "thumbnail_url": post.url,
             "download_url": best_dl,
+            "audio_url": direct_audio_url or best_dl,
             "filename": f"fastedl_{shortcode}.mp4",
             "video_duration": getattr(post, "video_duration", None),
             "video_view_count": getattr(post, "video_view_count", None),
@@ -603,7 +606,8 @@ def extract_with_instaloader(shortcode: str, raw_type: str) -> Dict[str, Any]:
             "height": orig_h,
             "resolution": res_str,
             "dimensions_label": dim_label,
-            "qualities": qualities
+            "qualities": qualities,
+            "has_audio": True
         })
 
     # Case 3: Single Image
@@ -748,6 +752,15 @@ def extract_with_ytdlp(url: str, shortcode: str, raw_type: str) -> Dict[str, Any
                     orig_height=h
                 )
                 best_dl = qualities[0]["download_url"] if qualities else media_url
+                ytdlp_audio_formats = [
+                    f for f in formats
+                    if f.get("acodec") and f.get("acodec") != "none" and f.get("vcodec") == "none" and f.get("url")
+                ]
+                best_ytdlp_audio = max(
+                    ytdlp_audio_formats,
+                    key=lambda f: f.get("abr") or f.get("tbr") or 0
+                ) if ytdlp_audio_formats else None
+                direct_audio_url = best_ytdlp_audio.get("url") if best_ytdlp_audio else None
 
                 items.append({
                     "index": 1,
@@ -755,13 +768,15 @@ def extract_with_ytdlp(url: str, shortcode: str, raw_type: str) -> Dict[str, Any
                     "format": "MP4",
                     "thumbnail_url": thumb,
                     "download_url": best_dl,
+                    "audio_url": direct_audio_url or best_dl,
                     "filename": f"fastedl_{shortcode}.mp4",
                     "video_duration": info.get("duration"),
                     "width": w,
                     "height": h,
                     "resolution": res_str,
                     "dimensions_label": dim_label,
-                    "qualities": qualities
+                    "qualities": qualities,
+                    "has_audio": True
                 })
             else:
                 items.append({
